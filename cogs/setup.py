@@ -106,7 +106,7 @@ async def _run_import(guild: discord.Guild, token: str, base_id: str) -> str:
     categories_table = base.table(TABLES["categories"])
     channels_table   = base.table(TABLES["channels"])
 
-    def _reconcile(table, discord_objects, name_field, id_field, skip_names=None, default_fields=None):
+    def _reconcile(table, discord_objects, name_field, id_field, skip_names=None):
         existing = table.all(fields=[name_field, id_field])
 
         by_discord_id: dict[str, dict] = {}
@@ -141,10 +141,7 @@ async def _run_import(guild: discord.Guild, token: str, base_id: str) -> str:
                 rec = by_name[obj.name]
                 to_update.append({"id": rec["id"], "fields": {id_field: discord_id_str}})
             else:
-                row = {name_field: obj.name, id_field: discord_id_str}
-                if default_fields:
-                    row.update(default_fields)
-                to_create.append(row)
+                to_create.append({name_field: obj.name, id_field: discord_id_str})
 
         if to_create:
             table.batch_create(to_create)
@@ -157,7 +154,6 @@ async def _run_import(guild: discord.Guild, token: str, base_id: str) -> str:
         roles_table, guild.roles,
         RoleFields.NAME, RoleFields.DISCORD_ID,
         skip_names={"@everyone"},
-        default_fields={RoleFields.EXCLUSIVE_GROUP: "None"},
     )
     cats_created,     cats_updated,     cats_skipped     = _reconcile(
         categories_table, guild.categories,

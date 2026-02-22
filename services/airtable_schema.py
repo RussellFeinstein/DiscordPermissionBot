@@ -17,13 +17,8 @@ _LEVEL_CHOICES = [
 ]
 
 _ROLES_FIELDS = [
-    {"name": "Role Name",       "type": "singleLineText"},
-    {"name": "Discord ID",      "type": "singleLineText"},
-    {"name": "Exclusive Group", "type": "singleSelect",
-     "options": {"choices": [
-         {"name": "None"}, {"name": "Leadership"}, {"name": "Team Officer"},
-         {"name": "Membership Status"}, {"name": "Team Assignment"},
-     ]}},
+    {"name": "Role Name",  "type": "singleLineText"},
+    {"name": "Discord ID", "type": "singleLineText"},
 ]
 
 _CATEGORIES_FIELDS = [

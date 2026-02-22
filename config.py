@@ -15,7 +15,6 @@ TABLES = {
 class RoleFields:
     NAME = "Role Name"
     DISCORD_ID = "Discord ID"
-    EXCLUSIVE_GROUP = "Exclusive Group"
 
 
 class CategoryFields:
@@ -36,17 +35,6 @@ class AccessRuleFields:
     CHANNELS = "Channels"                  # linked → Channels
     PERMISSION_LEVEL = "Permission Level"  # single-select → permission level name
     OVERWRITE = "Overwrite"                # "Allow" or "Deny"
-
-
-# ---------------------------------------------------------------------------
-# Exclusive group values (from Roles table)
-# ---------------------------------------------------------------------------
-class ExclusiveGroups:
-    NONE = "None"
-    LEADERSHIP = "Leadership"
-    TEAM_OFFICER = "Team Officer"
-    MEMBERSHIP_STATUS = "Membership Status"
-    TEAM_ASSIGNMENT = "Team Assignment"
 
 
 # ---------------------------------------------------------------------------
