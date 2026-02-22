@@ -1262,9 +1262,11 @@ class AdminCog(commands.Cog):
             )
 
         # --- helper: split lines into ≤1024-char field chunks ---
-        def _fields_for(title: str, lines: list[str]) -> list[tuple[str, str]]:
+        # hint (if given) is appended as a small italic line to the last chunk only.
+        def _fields_for(title: str, lines: list[str], hint: str = "") -> list[tuple[str, str]]:
+            hint_line = f"\n*{hint}*" if hint else ""
             if not lines:
-                return [(title, "*(none)*")]
+                return [(title, f"*(none)*{hint_line}")]
             out: list[tuple[str, str]] = []
             chunk: list[str] = []
             chars = 0
@@ -1278,15 +1280,33 @@ class AdminCog(commands.Cog):
                 chunk.append(line)
                 chars += len(line) + 1
             if chunk:
-                out.append((title if first else f"{title} (cont.)", "\n".join(chunk)))
+                body = "\n".join(chunk)
+                if hint and len(body) + len(hint_line) <= 1024:
+                    body += hint_line
+                out.append((title if first else f"{title} (cont.)", body))
             return out
 
         all_fields: list[tuple[str, str]] = [
-            (f"Permission Levels ({len(levels)})", level_text),
-            *_fields_for(f"Role Bundles ({len(bundles)})", bundle_lines),
-            *_fields_for(f"Exclusive Groups ({len(groups)})", eg_lines),
-            *_fields_for(f"Category Baselines ({len(baselines)})", bl_lines),
-            *_fields_for(f"Access Rules ({len(rules)})", rule_lines),
+            (
+                f"Permission Levels ({len(levels)})",
+                level_text + "\n*/level create • /level edit • /level delete • /level reset-defaults*",
+            ),
+            *_fields_for(
+                f"Role Bundles ({len(bundles)})", bundle_lines,
+                hint="/bundle create • /bundle add-role • /bundle remove-role • /bundle delete • /assign • /remove",
+            ),
+            *_fields_for(
+                f"Exclusive Groups ({len(groups)})", eg_lines,
+                hint="/exclusive-group create • /exclusive-group add-role • /exclusive-group remove-role • /exclusive-group delete",
+            ),
+            *_fields_for(
+                f"Category Baselines ({len(baselines)})", bl_lines,
+                hint="/category baseline-set • /category baseline-clear",
+            ),
+            *_fields_for(
+                f"Access Rules ({len(rules)})", rule_lines,
+                hint="/access-rule add-category • /access-rule add-channel • /access-rule edit • /access-rule remove • /access-rule prune • /sync-permissions",
+            ),
         ]
 
         # --- pack fields into embeds (≤6000 chars each) ---
