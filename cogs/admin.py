@@ -95,8 +95,8 @@ def _build_level_embed(
 
         # Split into two columns so the embed isn't too tall
         mid = (len(lines) + 1) // 2
-        marker = "▶ " if group_name == active_group else ""
-        embed.add_field(name=f"{marker}{group_name}", value="\n".join(lines[:mid]), inline=True)
+        label = f"{group_name} (active)" if group_name == active_group else group_name
+        embed.add_field(name=label, value="\n".join(lines[:mid]), inline=True)
         embed.add_field(name="\u200b",                value="\n".join(lines[mid:]) or "\u200b", inline=True)
         embed.add_field(name="\u200b",                value="\u200b", inline=False)   # row break
 
@@ -108,7 +108,7 @@ def _display_role(guild: discord.Guild, role_str: str) -> str:
     """Resolve a stored role ID (or legacy name) to a display name."""
     try:
         r = guild.get_role(int(role_str))
-        return r.name if r else f"(deleted {role_str})"
+        return r.name if r else "[deleted role]"
     except ValueError:
         return role_str  # legacy name stored before ID migration
 
@@ -168,6 +168,21 @@ def _build_bundle_embed(bundle_name: str, guild_id: int, guild: discord.Guild | 
     return embed
 
 
+def _build_eg_embed(group_name: str, guild_id: int, guild: discord.Guild | None = None) -> discord.Embed:
+    groups = local_store.get_exclusive_groups(guild_id)
+    role_strs = groups.get(group_name, [])
+    if guild:
+        roles_display = [_display_role(guild, rs) for rs in role_strs]
+    else:
+        roles_display = role_strs
+    embed = discord.Embed(
+        title=f"Exclusive Group — {group_name}",
+        color=discord.Color.orange(),
+        description="\n".join(f"• {r}" for r in roles_display) if roles_display else "*No roles yet*",
+    )
+    return embed
+
+
 # ---------------------------------------------------------------------------
 # Interactive UI — permission level editor
 # ---------------------------------------------------------------------------
@@ -194,7 +209,7 @@ class LevelGroupSelect(discord.ui.Select):
 
 class LevelGroupView(discord.ui.View):
     def __init__(self, level_name: str, guild_id: int):
-        super().__init__(timeout=180)
+        super().__init__(timeout=60)
         self.add_item(LevelGroupSelect(level_name, guild_id))
 
 
@@ -252,7 +267,7 @@ class LevelBackButton(discord.ui.Button):
 
 class LevelPermissionEditView(discord.ui.View):
     def __init__(self, level_name: str, group: str, guild_id: int):
-        super().__init__(timeout=180)
+        super().__init__(timeout=60)
         self.add_item(LevelPermissionSelect(level_name, group, guild_id))
         self.add_item(LevelBackButton(level_name, guild_id))
 
@@ -318,7 +333,7 @@ class ConfirmView(discord.ui.View):
     """Two-button (Confirm / Cancel) view for destructive operations."""
 
     def __init__(self):
-        super().__init__(timeout=30.0)
+        super().__init__(timeout=60.0)
         self.confirmed: bool | None = None
         self.button_interaction: discord.Interaction | None = None
 
@@ -358,7 +373,7 @@ class AdminCog(commands.Cog):
         levels = local_store.get_permission_levels(interaction.guild_id)
         embed = discord.Embed(
             title="Permission Levels",
-            description="\n".join(f"• **{name}**" for name in levels) or "*None defined*",
+            description="\n".join(f"• **{name}**" for name in sorted(levels, key=_level_sort_key)) or "*None defined*",
             color=discord.Color.blurple(),
         )
         embed.set_footer(text="Use /level view <name> to see the full permission breakdown")
@@ -389,7 +404,10 @@ class AdminCog(commands.Cog):
             return
         view = LevelGroupView(name, interaction.guild_id)
         embed = _build_level_embed(name, interaction.guild_id)
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await interaction.response.send_message(
+            content="*Select a group to edit. Menu expires after 60 seconds of inactivity.*",
+            embed=embed, view=view, ephemeral=True,
+        )
 
     @level.command(name="set", description="Set one permission on a level directly")
     @app_commands.describe(
@@ -457,7 +475,7 @@ class AdminCog(commands.Cog):
             return
         view = ConfirmView()
         await interaction.response.send_message(
-            f"Delete permission level **{name}**? This cannot be undone.",
+            f"Delete permission level **{name}**? This cannot be undone.\n*Expires in 60 seconds.*",
             view=view, ephemeral=True,
         )
         await view.wait()
@@ -486,7 +504,7 @@ class AdminCog(commands.Cog):
         view = ConfirmView()
         await interaction.response.send_message(
             "Reset **all** permission levels to built-in defaults? "
-            "Any custom levels or edits will be lost. This cannot be undone.",
+            "Any custom levels or edits will be lost. This cannot be undone.\n*Expires in 60 seconds.*",
             view=view, ephemeral=True,
         )
         await view.wait()
@@ -603,7 +621,7 @@ class AdminCog(commands.Cog):
             return
         view = ConfirmView()
         await interaction.response.send_message(
-            f"Delete bundle **{name}**? This cannot be undone.",
+            f"Delete bundle **{name}**? This cannot be undone.\n*Expires in 60 seconds.*",
             view=view, ephemeral=True,
         )
         await view.wait()
@@ -628,10 +646,10 @@ class AdminCog(commands.Cog):
     @app_commands.describe(
         name="The bundle to add to",
         role1="Role to add",
-        role2="Additional role",
-        role3="Additional role",
-        role4="Additional role",
-        role5="Additional role",
+        role2="2nd role (optional)",
+        role3="3rd role (optional)",
+        role4="4th role (optional)",
+        role5="5th role (optional)",
     )
     async def bundle_add_role(
         self,
@@ -759,7 +777,7 @@ class AdminCog(commands.Cog):
             return
         view = ConfirmView()
         await interaction.response.send_message(
-            f"Delete exclusive group **{name}**? This cannot be undone.",
+            f"Delete exclusive group **{name}**? This cannot be undone.\n*Expires in 60 seconds.*",
             view=view, ephemeral=True,
         )
         await view.wait()
@@ -784,10 +802,10 @@ class AdminCog(commands.Cog):
     @app_commands.describe(
         name="The exclusive group",
         role1="Role to add",
-        role2="Additional role",
-        role3="Additional role",
-        role4="Additional role",
-        role5="Additional role",
+        role2="2nd role (optional)",
+        role3="3rd role (optional)",
+        role4="4th role (optional)",
+        role5="5th role (optional)",
     )
     async def eg_add_role(
         self,
@@ -808,10 +826,8 @@ class AdminCog(commands.Cog):
                 f"Exclusive group **{name}** not found.", ephemeral=True
             )
             return
-        groups = local_store.get_exclusive_groups(interaction.guild_id)
-        display = [_display_role(interaction.guild, rs) for rs in groups.get(name, [])]
         await interaction.response.send_message(
-            f"**{name}**: {', '.join(display)}", ephemeral=True
+            embed=_build_eg_embed(name, interaction.guild_id, interaction.guild), ephemeral=True
         )
 
     @exclusive_group.command(name="remove-role", description="Remove a role from an exclusive group")
@@ -835,10 +851,8 @@ class AdminCog(commands.Cog):
             )
             return
         local_store.remove_role_from_exclusive_group(interaction.guild_id, name, to_remove)
-        groups = local_store.get_exclusive_groups(interaction.guild_id)
-        display = [_display_role(interaction.guild, rs) for rs in groups.get(name, [])]
         await interaction.response.send_message(
-            f"**{name}**: {', '.join(display) if display else '*empty*'}", ephemeral=True
+            embed=_build_eg_embed(name, interaction.guild_id, interaction.guild), ephemeral=True
         )
 
     # Autocomplete helpers for exclusive-group commands
@@ -881,7 +895,7 @@ class AdminCog(commands.Cog):
         lines = []
         for cat_id_str, level in baselines.items():
             cat = interaction.guild.get_channel(int(cat_id_str))
-            name = cat.name if cat else f"(deleted, ID {cat_id_str})"
+            name = cat.name if cat else "[deleted channel]"
             lines.append(f"• **{name}** → {level}")
         embed = discord.Embed(
             title="Category Baselines (@everyone)",
@@ -954,37 +968,6 @@ class AdminCog(commands.Cog):
         default_permissions=discord.Permissions(administrator=True),
     )
 
-    @access_rule.command(name="list", description="List all access rules")
-    async def ar_list(self, interaction: discord.Interaction):
-        data = local_store.get_access_rules_data(interaction.guild_id)
-        rules = data.get("rules", [])
-        if not rules:
-            await interaction.response.send_message(
-                "No access rules defined. Use `/access-rule add-category` or `/access-rule add-channel`.",
-                ephemeral=True,
-            )
-            return
-        lines = []
-        for rule in rules:
-            role_names = [_display_role(interaction.guild, rid_str) for rid_str in rule["role_ids"]]
-            target_names = []
-            for tid_str in rule["target_ids"]:
-                t = interaction.guild.get_channel(int(tid_str))
-                target_names.append(t.name if t else f"(deleted {tid_str})")
-            target_type = rule["target_type"].title()
-            lines.append(
-                f"**#{rule['id']}** {', '.join(role_names)} → "
-                f"{target_type}({', '.join(target_names)}) "
-                f"[{rule['level']}]"
-            )
-        embed = discord.Embed(
-            title="Access Rules",
-            description="\n".join(lines),
-            color=discord.Color.blurple(),
-        )
-        embed.set_footer(text="Rule IDs are permanent — gaps after deletion are normal.")
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
     @access_rule.command(
         name="add-category",
         description="Set one or more roles' permission level for an entire category",
@@ -993,10 +976,10 @@ class AdminCog(commands.Cog):
         role1="The role to configure",
         category="The category to apply the permission to",
         level="Permission level to apply",
-        role2="Additional role",
-        role3="Additional role",
-        role4="Additional role",
-        role5="Additional role",
+        role2="2nd role (optional)",
+        role3="3rd role (optional)",
+        role4="4th role (optional)",
+        role5="5th role (optional)",
     )
     async def ar_add_category(
         self,
@@ -1046,14 +1029,14 @@ class AdminCog(commands.Cog):
         role1="The role to configure",
         channel1="The channel to apply the permission to",
         level="Permission level to apply",
-        role2="Additional role",
-        role3="Additional role",
-        role4="Additional role",
-        role5="Additional role",
-        channel2="Additional channel",
-        channel3="Additional channel",
-        channel4="Additional channel",
-        channel5="Additional channel",
+        role2="2nd role (optional)",
+        role3="3rd role (optional)",
+        role4="4th role (optional)",
+        role5="5th role (optional)",
+        channel2="2nd channel (optional)",
+        channel3="3rd channel (optional)",
+        channel4="4th channel (optional)",
+        channel5="5th channel (optional)",
     )
     async def ar_add_channel(
         self,
@@ -1119,10 +1102,10 @@ class AdminCog(commands.Cog):
     )
     @app_commands.describe(
         rule_id1="Rule to remove",
-        rule_id2="Additional rule to remove",
-        rule_id3="Additional rule to remove",
-        rule_id4="Additional rule to remove",
-        rule_id5="Additional rule to remove",
+        rule_id2="2nd rule to remove (optional)",
+        rule_id3="3rd rule to remove (optional)",
+        rule_id4="4th rule to remove (optional)",
+        rule_id5="5th rule to remove (optional)",
     )
     async def ar_remove(
         self,
@@ -1156,7 +1139,7 @@ class AdminCog(commands.Cog):
             target_names = []
             for tid_str in rule["target_ids"]:
                 t = interaction.guild.get_channel(int(tid_str))
-                target_names.append(t.name if t else f"(deleted {tid_str})")
+                target_names.append(t.name if t else "[deleted channel]")
             lines.append(
                 f"• **#{rule['id']}** {', '.join(role_names)} → "
                 f"{rule['target_type']}({', '.join(target_names)}) [{rule['level']}]"
@@ -1166,7 +1149,7 @@ class AdminCog(commands.Cog):
 
         view = ConfirmView()
         await interaction.response.send_message(
-            f"Remove {len(found)} access rule(s)?\n" + "\n".join(lines),
+            f"Remove {len(found)} access rule(s)?\n" + "\n".join(lines) + "\n*Expires in 60 seconds.*",
             view=view,
             ephemeral=True,
         )
@@ -1198,11 +1181,11 @@ class AdminCog(commands.Cog):
             role_names = []
             for rid_str in rule["role_ids"]:
                 r = interaction.guild.get_role(int(rid_str))
-                role_names.append(r.name if r else f"deleted:{rid_str}")
+                role_names.append(r.name if r else "[deleted role]")
             target_names = []
             for tid_str in rule["target_ids"]:
                 t = interaction.guild.get_channel(int(tid_str))
-                target_names.append(t.name if t else f"deleted:{tid_str}")
+                target_names.append(t.name if t else "[deleted channel]")
             label = (
                 f"#{rule['id']} {', '.join(role_names)} → "
                 f"{', '.join(target_names)} [{rule['level']}]"
@@ -1379,7 +1362,7 @@ class AdminCog(commands.Cog):
 
         def _target_name(tid_str: str) -> str:
             ch = guild.get_channel(int(tid_str))
-            return ch.name if ch else f"deleted:{tid_str}"
+            return ch.name if ch else "[deleted channel]"
 
         def _rule_sort_key(rule: dict) -> tuple:
             """Sort within a target: @everyone first, then alpha by primary role, then level, then ID."""
