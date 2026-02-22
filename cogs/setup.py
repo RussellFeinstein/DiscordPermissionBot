@@ -16,12 +16,6 @@ from services import guild_config, airtable_schema
 from services.airtable_client import reset_client
 from config import TABLES, RoleFields, CategoryFields, ChannelFields
 
-# Fields fetched when reconciling existing Airtable rows during import
-_ROLE_FIELDS    = [RoleFields.NAME,     RoleFields.DISCORD_ID]
-_CAT_FIELDS     = [CategoryFields.NAME, CategoryFields.DISCORD_ID]
-_CHANNEL_FIELDS = [ChannelFields.NAME,  ChannelFields.DISCORD_ID]
-
-
 # ---------------------------------------------------------------------------
 # Modal
 # ---------------------------------------------------------------------------
@@ -95,8 +89,124 @@ class AirtableSetupModal(discord.ui.Modal, title="Connect Airtable"):
 
 
 # ---------------------------------------------------------------------------
+# Shared import helper (used by both the command and the post-create button)
+# ---------------------------------------------------------------------------
+
+async def _run_import(guild: discord.Guild, token: str, base_id: str) -> str:
+    """
+    Populate Roles, Categories, and Channels tables from the Discord guild.
+    Returns a formatted result string (or raises on failure).
+    """
+    airtable_schema.ensure_discord_id_fields(token, base_id)
+
+    api = Api(token)
+    base = api.base(base_id)
+
+    roles_table      = base.table(TABLES["roles"])
+    categories_table = base.table(TABLES["categories"])
+    channels_table   = base.table(TABLES["channels"])
+
+    def _reconcile(table, discord_objects, name_field, id_field, skip_names=None):
+        existing = table.all(fields=[name_field, id_field])
+
+        by_discord_id: dict[str, dict] = {}
+        by_name: dict[str, dict] = {}
+
+        for rec in existing:
+            f = rec["fields"]
+            did = f.get(id_field, "")
+            nm  = f.get(name_field, "")
+            if did:
+                by_discord_id[str(did)] = rec
+            if nm:
+                by_name[nm] = rec
+
+        to_create = []
+        to_update = []
+        skipped   = 0
+
+        for obj in discord_objects:
+            if skip_names and obj.name in skip_names:
+                continue
+
+            discord_id_str = str(obj.id)
+
+            if discord_id_str in by_discord_id:
+                rec = by_discord_id[discord_id_str]
+                if rec["fields"].get(name_field) != obj.name:
+                    to_update.append({"id": rec["id"], "fields": {name_field: obj.name}})
+                else:
+                    skipped += 1
+            elif obj.name in by_name:
+                rec = by_name[obj.name]
+                to_update.append({"id": rec["id"], "fields": {id_field: discord_id_str}})
+            else:
+                to_create.append({name_field: obj.name, id_field: discord_id_str})
+
+        if to_create:
+            table.batch_create(to_create)
+        if to_update:
+            table.batch_update(to_update)
+
+        return len(to_create), len(to_update), skipped
+
+    roles_created,    roles_updated,    roles_skipped    = _reconcile(
+        roles_table, guild.roles,
+        RoleFields.NAME, RoleFields.DISCORD_ID,
+        skip_names={"@everyone"},
+    )
+    cats_created,     cats_updated,     cats_skipped     = _reconcile(
+        categories_table, guild.categories,
+        CategoryFields.NAME, CategoryFields.DISCORD_ID,
+    )
+    channels_created, channels_updated, channels_skipped = _reconcile(
+        channels_table,
+        [c for c in guild.channels if not isinstance(c, discord.CategoryChannel)],
+        ChannelFields.NAME, ChannelFields.DISCORD_ID,
+    )
+
+    lines = ["**Import complete:**"]
+    lines.append(f"  Roles: {roles_created} added, {roles_updated} updated, {roles_skipped} unchanged")
+    lines.append(f"  Categories: {cats_created} added, {cats_updated} updated, {cats_skipped} unchanged")
+    lines.append(f"  Channels: {channels_created} added, {channels_updated} updated, {channels_skipped} unchanged")
+    lines.append(
+        "\nNext: open Airtable and fill in `Exclusive Group` for roles and "
+        "`Baseline Permission` for categories, then create your Access Rules."
+    )
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Follow-up view after detecting missing tables
 # ---------------------------------------------------------------------------
+
+class _ImportDiscordView(discord.ui.View):
+    def __init__(self, token: str, base_id: str):
+        super().__init__(timeout=300)
+        self._token = token
+        self._base_id = base_id
+
+    @discord.ui.button(label="Import roles, categories & channels", style=discord.ButtonStyle.primary)
+    async def do_import(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            result = await _run_import(interaction.guild, self._token, self._base_id)
+            reset_client(interaction.guild_id)
+        except Exception as e:
+            await interaction.followup.send(f"Import failed: `{e}`", ephemeral=True)
+            self.stop()
+            return
+        await interaction.followup.send(result, ephemeral=True)
+        self.stop()
+
+    @discord.ui.button(label="I'll fill in Airtable manually", style=discord.ButtonStyle.secondary)
+    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "Skipped. Open Airtable and add your roles, categories, and channels manually.",
+            ephemeral=True,
+        )
+        self.stop()
+
 
 class _CreateTablesView(discord.ui.View):
     def __init__(self, token: str, base_id: str):
@@ -112,8 +222,9 @@ class _CreateTablesView(discord.ui.View):
             created_fmt = ", ".join(f"**{t}**" for t in created)
             await interaction.followup.send(
                 f"Created: {created_fmt}\n\n"
-                "Your Airtable base is ready. Add your roles, categories, and channels, "
-                "then run `/sync-permissions`.",
+                "Would you like to populate the tables with your server's roles, "
+                "categories, and channels now?",
+                view=_ImportDiscordView(self._token, self._base_id),
                 ephemeral=True,
             )
         except Exception as e:
@@ -169,106 +280,18 @@ class SetupCog(commands.Cog):
             )
             return
 
-        token = config["airtable_token"]
-        base_id = config["airtable_base_id"]
-        guild = interaction.guild
-
         try:
-            # Ensure the Discord ID field exists on all three tables before writing.
-            airtable_schema.ensure_discord_id_fields(token, base_id)
-
-            api = Api(token)
-            base = api.base(base_id)
-
-            roles_table      = base.table(TABLES["roles"])
-            categories_table = base.table(TABLES["categories"])
-            channels_table   = base.table(TABLES["channels"])
-
-            # ----------------------------------------------------------
-            # Helper: reconcile one table against a list of Discord objects.
-            #
-            # Returns (created, updated, skipped) counts.
-            # ----------------------------------------------------------
-            def _reconcile(table, discord_objects, name_field, id_field, skip_names=None):
-                existing = table.all(fields=[name_field, id_field])
-
-                # Index existing rows by Discord ID (canonical) and by name (fallback)
-                by_discord_id: dict[str, dict] = {}   # discord_id_str → record
-                by_name: dict[str, dict] = {}          # name → record
-
-                for rec in existing:
-                    f = rec["fields"]
-                    did = f.get(id_field, "")
-                    nm  = f.get(name_field, "")
-                    if did:
-                        by_discord_id[str(did)] = rec
-                    if nm:
-                        by_name[nm] = rec
-
-                to_create = []
-                to_update = []   # list of {"id": record_id, "fields": {...}}
-                skipped   = 0
-
-                for obj in discord_objects:
-                    if skip_names and obj.name in skip_names:
-                        continue
-
-                    discord_id_str = str(obj.id)
-
-                    if discord_id_str in by_discord_id:
-                        # Already tracked by ID — update name if it drifted
-                        rec = by_discord_id[discord_id_str]
-                        if rec["fields"].get(name_field) != obj.name:
-                            to_update.append({"id": rec["id"], "fields": {name_field: obj.name}})
-                        else:
-                            skipped += 1
-                    elif obj.name in by_name:
-                        # Tracked by name only — backfill the Discord ID
-                        rec = by_name[obj.name]
-                        to_update.append({"id": rec["id"], "fields": {id_field: discord_id_str}})
-                    else:
-                        # New object — create with both name and Discord ID
-                        to_create.append({name_field: obj.name, id_field: discord_id_str})
-
-                if to_create:
-                    table.batch_create(to_create)
-                if to_update:
-                    table.batch_update(to_update)
-
-                return len(to_create), len(to_update), skipped
-
-            roles_created,    roles_updated,    roles_skipped    = _reconcile(
-                roles_table, guild.roles,
-                RoleFields.NAME, RoleFields.DISCORD_ID,
-                skip_names={"@everyone"},
+            result = await _run_import(
+                interaction.guild,
+                config["airtable_token"],
+                config["airtable_base_id"],
             )
-            cats_created,     cats_updated,     cats_skipped     = _reconcile(
-                categories_table, guild.categories,
-                CategoryFields.NAME, CategoryFields.DISCORD_ID,
-            )
-            channels_created, channels_updated, channels_skipped = _reconcile(
-                channels_table,
-                [c for c in guild.channels if not isinstance(c, discord.CategoryChannel)],
-                ChannelFields.NAME, ChannelFields.DISCORD_ID,
-            )
-
-            # Drop the cached client so the next call re-fetches fresh data
             reset_client(interaction.guild_id)
-
         except Exception as e:
-            await interaction.followup.send(
-                f"Import failed: `{e}`",
-                ephemeral=True,
-            )
+            await interaction.followup.send(f"Import failed: `{e}`", ephemeral=True)
             return
 
-        lines = ["**Import complete:**"]
-        lines.append(f"  Roles: {roles_created} added, {roles_updated} updated, {roles_skipped} unchanged")
-        lines.append(f"  Categories: {cats_created} added, {cats_updated} updated, {cats_skipped} unchanged")
-        lines.append(f"  Channels: {channels_created} added, {channels_updated} updated, {channels_skipped} unchanged")
-        lines.append("\nNext: open Airtable and fill in `Exclusive Group` for roles and `Baseline Permission` for categories, then create your Access Rules.")
-
-        await interaction.followup.send("\n".join(lines), ephemeral=True)
+        await interaction.followup.send(result, ephemeral=True)
 
     @setup_group.command(
         name="status",
