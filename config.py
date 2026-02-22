@@ -73,11 +73,11 @@ PERMISSION_LEVELS_DEFAULT: dict[str, dict[str, bool]] = {
         "use_soundboard":             False,
     },
     "Chat": {
+        "change_nickname":            True,
         "view_channel":               True,
         "read_message_history":       True,
         "send_messages":              True,
         "send_messages_in_threads":   True,
-        "create_public_threads":      True,
         "embed_links":                True,
         "attach_files":               True,
         "add_reactions":              True,
@@ -124,6 +124,7 @@ PERMISSION_LEVELS_DEFAULT: dict[str, dict[str, bool]] = {
         "moderate_members":           True,
         "kick_members":               True,
         "manage_nicknames":           True,
+        "mention_everyone":           True,
     },
     "Admin": {
         "administrator":              True,
