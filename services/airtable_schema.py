@@ -47,11 +47,14 @@ def _get_table_map(token: str, base_id: str) -> dict[str, str]:
         return {t.name: t.id for t in tables}
 
 
+_REQUIRED = {"Roles", "Categories", "Channels", "Access Rules"}
+
+
 def check_missing(token: str, base_id: str) -> list[str]:
     """Return sorted list of required table names that do not yet exist."""
-    required = {"Roles", "Categories", "Channels", "Access Rules"}
     existing = set(_get_table_map(token, base_id).keys())
-    return sorted(required - existing)
+    return sorted(_REQUIRED - existing)
+
 
 
 def create_missing(token: str, base_id: str) -> list[str]:

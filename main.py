@@ -73,7 +73,7 @@ class Bot(commands.Bot):
             return
 
         embed = discord.Embed(
-            title="Thanks for adding Discord Permissions Manager!",
+            title="Thanks for adding Permissions Manager!",
             description=(
                 "Here's how to get started:\n\n"
                 "**Bundles & permission levels** work right away — no setup needed:\n"
