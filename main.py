@@ -1,5 +1,6 @@
 import os
 import sys
+from pathlib import Path
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
@@ -47,14 +48,19 @@ class Bot(commands.Bot):
 
         # In production (no DISCORD_GUILD_ID), clear any stale guild-specific
         # commands left over from dev-mode testing so they don't appear twice.
+        # A sentinel file prevents this from re-running on every restart.
         if not os.environ.get("DISCORD_GUILD_ID"):
-            cleared = 0
-            for guild in self.guilds:
-                self.tree.clear_commands(guild=guild)
-                await self.tree.sync(guild=guild)
-                cleared += 1
-            if cleared:
-                print(f"Cleared guild-specific commands from {cleared} server(s).")
+            sentinel = Path(os.environ.get("DATA_DIR") or "data") / ".guild_commands_cleared"
+            if not sentinel.exists():
+                cleared = 0
+                for guild in self.guilds:
+                    self.tree.clear_commands(guild=guild)
+                    await self.tree.sync(guild=guild)
+                    cleared += 1
+                sentinel.parent.mkdir(parents=True, exist_ok=True)
+                sentinel.touch()
+                if cleared:
+                    print(f"Cleared guild-specific commands from {cleared} server(s).")
 
     async def on_guild_join(self, guild: discord.Guild):
         """Send a welcome DM to the person who invited the bot."""

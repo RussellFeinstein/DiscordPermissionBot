@@ -119,14 +119,14 @@ def build_permission_plan(guild: discord.Guild) -> PermissionPlan:
 
         base_overwrite = level_to_overwrite(level_name, guild.id)
 
-        # Deny rules flip every explicit allow → explicit deny.
+        # Deny rules flip every explicit Allow → explicit Deny.
+        # Explicit Deny and neutral entries are left neutral — the goal is
+        # only to block what the level would grant, not to grant what it blocks.
         if overwrite_dir == "Deny":
             flipped: dict[str, bool] = {}
             for attr, val in base_overwrite:
                 if val is True:
                     flipped[attr] = False
-                elif val is False:
-                    flipped[attr] = True
             final_overwrite = discord.PermissionOverwrite(**flipped)
         else:
             final_overwrite = base_overwrite

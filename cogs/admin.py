@@ -443,9 +443,22 @@ class AdminCog(commands.Cog):
         description="Restore all permission levels to the built-in defaults",
     )
     async def level_reset_defaults(self, interaction: discord.Interaction):
-        local_store.reset_levels_to_default(interaction.guild_id)
+        view = ConfirmView()
         await interaction.response.send_message(
-            "Permission levels reset to defaults.", ephemeral=True
+            "Reset **all** permission levels to built-in defaults? "
+            "Any custom levels or edits will be lost. This cannot be undone.",
+            view=view, ephemeral=True,
+        )
+        await view.wait()
+        if view.confirmed is None:
+            await interaction.edit_original_response(content="Timed out.", view=None)
+            return
+        if not view.confirmed:
+            await view.button_interaction.response.edit_message(content="Cancelled.", view=None)
+            return
+        local_store.reset_levels_to_default(interaction.guild_id)
+        await view.button_interaction.response.edit_message(
+            content="Permission levels reset to defaults.", view=None
         )
 
     # Autocomplete for level name
@@ -499,14 +512,15 @@ class AdminCog(commands.Cog):
         if not bundles:
             await interaction.response.send_message("No bundles defined yet.", ephemeral=True)
             return
-        embed = discord.Embed(title="Role Bundles", color=discord.Color.green())
+        lines = []
         for name, role_strs in bundles.items():
             display = [_display_role(interaction.guild, rs) for rs in role_strs]
-            embed.add_field(
-                name=name,
-                value=", ".join(display) if display else "*empty*",
-                inline=False,
-            )
+            lines.append(f"**{name}**: {', '.join(display) if display else '*empty*'}")
+        embed = discord.Embed(
+            title="Role Bundles",
+            description=_truncate_field(lines, limit=4096),
+            color=discord.Color.green(),
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @bundle.command(name="view", description="Show the roles in a bundle")
@@ -671,14 +685,15 @@ class AdminCog(commands.Cog):
                 ephemeral=True,
             )
             return
-        embed = discord.Embed(title="Exclusive Groups", color=discord.Color.orange())
+        lines = []
         for name, role_strs in groups.items():
             display = [_display_role(interaction.guild, rs) for rs in role_strs]
-            embed.add_field(
-                name=name,
-                value=", ".join(display) if display else "*no roles yet*",
-                inline=False,
-            )
+            lines.append(f"**{name}**: {', '.join(display) if display else '*no roles yet*'}")
+        embed = discord.Embed(
+            title="Exclusive Groups",
+            description=_truncate_field(lines, limit=4096),
+            color=discord.Color.orange(),
+        )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @exclusive_group.command(name="create", description="Create a new exclusive group")
@@ -872,10 +887,15 @@ class AdminCog(commands.Cog):
         interaction: discord.Interaction,
         category: discord.CategoryChannel,
     ):
+        baselines = local_store.get_category_baselines(interaction.guild_id)
+        if str(category.id) not in baselines:
+            await interaction.response.send_message(
+                f"**{category.name}** has no baseline set.", ephemeral=True
+            )
+            return
         local_store.clear_category_baseline(interaction.guild_id, str(category.id))
         await interaction.response.send_message(
-            f"Cleared baseline for **{category.name}**.",
-            ephemeral=True,
+            f"Cleared baseline for **{category.name}**.", ephemeral=True
         )
 
     @cat_baseline_set.autocomplete("level")
@@ -906,10 +926,7 @@ class AdminCog(commands.Cog):
             return
         lines = []
         for rule in rules:
-            role_names = []
-            for rid_str in rule["role_ids"]:
-                r = interaction.guild.get_role(int(rid_str))
-                role_names.append(r.name if r else f"(deleted {rid_str})")
+            role_names = [_display_role(interaction.guild, rid_str) for rid_str in rule["role_ids"]]
             target_names = []
             for tid_str in rule["target_ids"]:
                 t = interaction.guild.get_channel(int(tid_str))
@@ -1032,10 +1049,7 @@ class AdminCog(commands.Cog):
                 f"Access rule **#{rule_id}** not found.", ephemeral=True
             )
             return
-        role_names = []
-        for rid_str in rule["role_ids"]:
-            r = interaction.guild.get_role(int(rid_str))
-            role_names.append(r.name if r else f"(deleted {rid_str})")
+        role_names = [_display_role(interaction.guild, rid_str) for rid_str in rule["role_ids"]]
         target_names = []
         for tid_str in rule["target_ids"]:
             t = interaction.guild.get_channel(int(tid_str))
@@ -1245,10 +1259,7 @@ class AdminCog(commands.Cog):
         if rules:
             rule_lines = []
             for rule in rules:
-                role_names = []
-                for rid_str in rule["role_ids"]:
-                    r = interaction.guild.get_role(int(rid_str))
-                    role_names.append(r.name if r else f"(deleted {rid_str})")
+                role_names = [_display_role(interaction.guild, rid_str) for rid_str in rule["role_ids"]]
                 target_names = []
                 for tid_str in rule["target_ids"]:
                     t = interaction.guild.get_channel(int(tid_str))
