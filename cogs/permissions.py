@@ -6,11 +6,9 @@ from services.sync import build_permission_plan, apply_permission_plan, diff_per
 
 # Max characters Discord allows in a single message
 _DISCORD_MAX = 2000
-# Characters reserved for code block wrappers
-_CODE_BLOCK_OVERHEAD = 8  # ```\n...\n```
 
 
-def _chunk_lines(lines: list[str], max_len: int = _DISCORD_MAX - _CODE_BLOCK_OVERHEAD) -> list[str]:
+def _chunk_lines(lines: list[str], max_len: int = _DISCORD_MAX) -> list[str]:
     """Split a list of lines into chunks that fit within Discord's message limit."""
     chunks, current = [], []
     current_len = 0
@@ -54,15 +52,11 @@ class PermissionsCog(commands.Cog):
             await interaction.followup.send("No permission changes detected.", ephemeral=True)
             return
 
-        summary = f"**Permission preview — {len(lines)} overwrite(s)**\n"
-        chunks = _chunk_lines(lines)
-
         await interaction.followup.send(
-            summary + f"```\n{chunks[0]}\n```",
-            ephemeral=True,
+            f"**Permission preview — {len(lines)} overwrite(s)**", ephemeral=True
         )
-        for chunk in chunks[1:]:
-            await interaction.followup.send(f"```\n{chunk}\n```", ephemeral=True)
+        for chunk in _chunk_lines(lines):
+            await interaction.followup.send(chunk, ephemeral=True)
 
     # ------------------------------------------------------------------
     # /sync-permissions

@@ -58,6 +58,19 @@ from services import local_store
 _VAL_EMOJI = {True: "✅", False: "❌", None: "⬜"}
 _VAL_LABEL = {True: "Allow", False: "Deny", None: "Neutral"}
 
+_EMBED_FIELD_MAX = 1024
+
+
+def _truncate_field(lines: list[str], limit: int = _EMBED_FIELD_MAX) -> str:
+    """Join lines and hard-truncate to Discord's embed field character limit."""
+    text = "\n".join(lines)
+    if len(text) <= limit:
+        return text
+    cut = text.rfind("\n", 0, limit - 20)
+    if cut == -1:
+        cut = limit - 20
+    return text[:cut] + "\n… (truncated)"
+
 
 def _build_level_embed(
     level_name: str,
@@ -895,7 +908,7 @@ class AdminCog(commands.Cog):
             description="\n".join(lines),
             color=discord.Color.blurple(),
         )
-        embed.set_footer(text="Use /access-rule remove <id> to delete a rule")
+        embed.set_footer(text="Rule IDs are permanent — gaps after deletion are normal.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @access_rule.command(
@@ -1211,13 +1224,13 @@ class AdminCog(commands.Cog):
                 bl_lines.append(f"• {name} → {level}")
             embed.add_field(
                 name="Category Baselines Detail",
-                value="\n".join(bl_lines),
+                value=_truncate_field(bl_lines),
                 inline=False,
             )
 
         if rules:
             rule_lines = []
-            for rule in rules[:10]:  # cap to avoid embed overflow
+            for rule in rules:
                 role_names = []
                 for rid_str in rule["role_ids"]:
                     r = interaction.guild.get_role(int(rid_str))
@@ -1231,11 +1244,9 @@ class AdminCog(commands.Cog):
                     f"{rule['target_type']}({', '.join(target_names)}) "
                     f"[{rule['level']}/{rule.get('overwrite','Allow')}]"
                 )
-            if len(rules) > 10:
-                rule_lines.append(f"… and {len(rules) - 10} more")
             embed.add_field(
                 name="Access Rules Detail",
-                value="\n".join(rule_lines),
+                value=_truncate_field(rule_lines),
                 inline=False,
             )
 
