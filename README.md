@@ -173,19 +173,22 @@ The bot reads four tables. Field names must match exactly — they are configure
 #### Roles
 | Field | Type | Notes |
 |---|---|---|
-| Role Name | Text | Must match the Discord role name exactly |
+| Role Name | Text | Display name — kept in sync automatically |
+| Discord ID | Text | Populated by `/setup import-discord` — used as the stable identifier |
 | Exclusive Group | Single select | None, Leadership, Team Officer, Membership Status, Team Assignment |
 
 #### Categories
 | Field | Type | Notes |
 |---|---|---|
-| Category Name | Text | Must match the Discord category name exactly |
+| Category Name | Text | Display name — kept in sync automatically |
+| Discord ID | Text | Populated by `/setup import-discord` — used as the stable identifier |
 | Baseline Permission | Single select | `@everyone` permission level — None, View, Chat, Mod, Admin |
 
 #### Channels
 | Field | Type | Notes |
 |---|---|---|
-| Channel Name | Text | Must match the Discord channel name exactly |
+| Channel Name | Text | Display name — kept in sync automatically |
+| Discord ID | Text | Populated by `/setup import-discord` — used as the stable identifier |
 
 #### Access Rules
 | Field | Type | Notes |
