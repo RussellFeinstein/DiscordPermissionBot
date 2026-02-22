@@ -103,9 +103,22 @@ class PermissionsCog(commands.Cog):
             ephemeral=True,
         )
 
-        applied, errors = await apply_permission_plan(plan, guild)
+        applied, removed, errors = await apply_permission_plan(plan, guild)
 
-        result = f"Done — **{applied}** applied."
+        # Flush any name-drift corrections and Discord ID backfills queued during planning.
+        drift_count = 0
+        if plan.airtable_updates:
+            try:
+                drift_count = get_airtable(guild.id).flush_updates(plan.airtable_updates)
+            except Exception as e:
+                print(f"[sync] Failed to flush Airtable updates: {e}")
+
+        result = f"Done — **{applied}** applied"
+        if removed:
+            result += f", **{removed}** stale overwrite(s) removed"
+        if drift_count:
+            result += f", **{drift_count}** Airtable name(s) refreshed"
+        result += "."
         if errors:
             result += f"  ⚠️ {errors} error(s) — check bot logs."
 

@@ -14,16 +14,19 @@ TABLES = {
 # ---------------------------------------------------------------------------
 class RoleFields:
     NAME = "Role Name"
+    DISCORD_ID = "Discord ID"
     EXCLUSIVE_GROUP = "Exclusive Group"
 
 
 class CategoryFields:
     NAME = "Category Name"
+    DISCORD_ID = "Discord ID"
     BASELINE = "Baseline Permission"   # single-select → permission level name
 
 
 class ChannelFields:
     NAME = "Channel Name"
+    DISCORD_ID = "Discord ID"
 
 
 class AccessRuleFields:

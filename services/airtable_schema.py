@@ -18,6 +18,7 @@ _LEVEL_CHOICES = [
 
 _ROLES_FIELDS = [
     {"name": "Role Name",       "type": "singleLineText"},
+    {"name": "Discord ID",      "type": "singleLineText"},
     {"name": "Exclusive Group", "type": "singleSelect",
      "options": {"choices": [
          {"name": "None"}, {"name": "Leadership"}, {"name": "Team Officer"},
@@ -27,6 +28,7 @@ _ROLES_FIELDS = [
 
 _CATEGORIES_FIELDS = [
     {"name": "Category Name",       "type": "singleLineText"},
+    {"name": "Discord ID",          "type": "singleLineText"},
     {"name": "Baseline Permission", "type": "singleSelect",
      "options": {"choices": _LEVEL_CHOICES}},
 ]
@@ -75,6 +77,7 @@ def create_missing(token: str, base_id: str) -> list[str]:
     if "Channels" not in table_ids:
         t = base.create_table("Channels", [
             {"name": "Channel Name", "type": "singleLineText"},
+            {"name": "Discord ID",   "type": "singleLineText"},
         ])
         table_ids["Channels"] = t.id
         created.append("Channels")
@@ -97,3 +100,30 @@ def create_missing(token: str, base_id: str) -> list[str]:
         created.append("Access Rules")
 
     return created
+
+
+def ensure_discord_id_fields(token: str, base_id: str) -> list[str]:
+    """
+    Add a 'Discord ID' field (singleLineText) to Roles, Categories, and Channels
+    if those tables exist but are missing the field.
+
+    Returns a list of table names that were updated.
+    Called automatically by /setup import-discord before writing IDs.
+    """
+    api = Api(token)
+    base = api.base(base_id)
+    updated: list[str] = []
+
+    for table_name in ("Roles", "Categories", "Channels"):
+        try:
+            table = base.table(table_name)
+            schema = table.schema()
+            existing_fields = {f.name for f in schema.fields}
+            if "Discord ID" not in existing_fields:
+                table.create_field("Discord ID", "singleLineText")
+                updated.append(table_name)
+                print(f"[schema] Added 'Discord ID' field to {table_name}")
+        except Exception as e:
+            print(f"[schema] Could not add 'Discord ID' to {table_name}: {e}")
+
+    return updated

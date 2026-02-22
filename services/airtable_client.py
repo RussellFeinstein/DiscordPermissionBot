@@ -140,6 +140,21 @@ class AirtableClient:
             if r["fields"].get(RoleFields.EXCLUSIVE_GROUP) == group
         ]
 
+    def flush_updates(self, updates: list[tuple[str, str, dict]]) -> int:
+        """
+        Apply a batch of pending field updates to Airtable.
+        Each entry is (table_key, airtable_record_id, fields_dict).
+        Returns the number of records successfully updated.
+        """
+        applied = 0
+        for table_key, record_id, fields in updates:
+            try:
+                self._table(table_key).update(record_id, fields)
+                applied += 1
+            except Exception as e:
+                print(f"[airtable:{self._guild_id}] Failed to update record {record_id}: {e}")
+        return applied
+
 
 # ---------------------------------------------------------------------------
 # Per-guild client registry
