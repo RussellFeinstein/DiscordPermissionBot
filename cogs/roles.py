@@ -9,32 +9,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from config import RoleFields, ExclusiveGroups
-from services.airtable_client import get_airtable
 from services import local_store
 
 
 # ---------------------------------------------------------------------------
 # Bundle helpers
 # ---------------------------------------------------------------------------
-
-def _exclusive_group_roles(
-    guild: discord.Guild,
-    group: str,
-    guild_id: int,
-) -> list[discord.Role]:
-    """
-    Return every Discord role that belongs to a given exclusive group
-    (as defined in the Airtable Roles table).
-    """
-    airtable = get_airtable(guild_id)
-    group_role_names = {
-        r["fields"].get(RoleFields.NAME)
-        for r in airtable.get_roles()
-        if r["fields"].get(RoleFields.EXCLUSIVE_GROUP) == group
-    }
-    return [r for r in guild.roles if r.name in group_role_names]
-
 
 async def _apply_bundle(
     member: discord.Member,
@@ -43,43 +23,38 @@ async def _apply_bundle(
 ) -> tuple[list[discord.Role], list[discord.Role]]:
     """
     Add all roles in bundle_roles to the member, automatically removing
-    any conflicting roles from the same exclusive group (if Airtable is configured).
+    any conflicting roles from the same exclusive group.
 
     Returns (added, removed).
     """
-    added: list[discord.Role] = []
     to_remove: list[discord.Role] = []
 
-    try:
-        airtable = get_airtable(guild.id)
+    groups = local_store.get_exclusive_groups(guild.id)
+    # Invert to role_name → group_name for quick lookup
+    role_to_group = {r: g for g, roles in groups.items() for r in roles}
 
-        # Find exclusive groups of roles being added
-        exclusive_groups: set[str] = set()
-        for role in bundle_roles:
-            at_role = airtable.get_role_by_name(role.name)
-            if at_role:
-                group = at_role["fields"].get(RoleFields.EXCLUSIVE_GROUP, ExclusiveGroups.NONE)
-                if group != ExclusiveGroups.NONE:
-                    exclusive_groups.add(group)
+    # Find which exclusive groups the incoming roles belong to
+    incoming_groups: set[str] = set()
+    for role in bundle_roles:
+        g = role_to_group.get(role.name)
+        if g:
+            incoming_groups.add(g)
 
-        # Collect conflicting roles the member already has
-        for group in exclusive_groups:
-            group_roles = _exclusive_group_roles(guild, group, guild.id)
-            for gr in group_roles:
-                if gr in member.roles and gr not in bundle_roles:
-                    to_remove.append(gr)
+    # Collect any roles the member already holds that conflict
+    if incoming_groups:
+        member_role_names = {r.name for r in member.roles}
+        for group in incoming_groups:
+            for role_name in groups[group]:
+                if role_name in member_role_names:
+                    discord_role = discord.utils.get(guild.roles, name=role_name)
+                    if discord_role and discord_role not in bundle_roles:
+                        to_remove.append(discord_role)
 
-    except RuntimeError:
-        # Airtable not configured — skip exclusive group resolution, just add roles
-        pass
-
-    # Apply changes
     if to_remove:
         await member.remove_roles(*to_remove, reason="Exclusive group conflict — bundle assignment")
     await member.add_roles(*bundle_roles, reason="Bundle assignment")
 
-    added = bundle_roles
-    return added, to_remove
+    return bundle_roles, to_remove
 
 
 # ---------------------------------------------------------------------------

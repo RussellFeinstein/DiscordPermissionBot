@@ -1,5 +1,5 @@
 """
-admin.py — interactive management of permission levels and role bundles.
+admin.py — interactive management of permission levels, role bundles, and exclusive groups.
 
 Permission level commands  (/level ...)
   /level list              — list all levels
@@ -17,6 +17,13 @@ Bundle commands  (/bundle ...)
   /bundle delete <name>    — delete a bundle
   /bundle add-role <bundle> <role>     — add a Discord role to a bundle
   /bundle remove-role <bundle> <role>  — remove a role from a bundle
+
+Exclusive group commands  (/exclusive-group ...)
+  /exclusive-group list                       — list all groups and their roles
+  /exclusive-group create <name>              — create an empty group
+  /exclusive-group delete <name>              — delete a group
+  /exclusive-group add-role <group> <role>    — add a role to a group
+  /exclusive-group remove-role <group> <role> — remove a role from a group
 """
 
 import discord
@@ -539,6 +546,123 @@ class AdminCog(commands.Cog):
         bundle_name = interaction.namespace.name
         bundles = local_store.get_bundles(interaction.guild_id)
         roles = bundles.get(bundle_name, [])
+        return [
+            app_commands.Choice(name=r, value=r)
+            for r in roles
+            if current.lower() in r.lower()
+        ][:25]
+
+    # ==================================================================
+    # /exclusive-group group
+    # ==================================================================
+
+    exclusive_group = app_commands.Group(
+        name="exclusive-group",
+        description="Manage exclusive role groups (only one role per group can be held at a time)",
+        default_permissions=discord.Permissions(administrator=True),
+    )
+
+    @exclusive_group.command(name="list", description="List all exclusive groups and their roles")
+    async def eg_list(self, interaction: discord.Interaction):
+        groups = local_store.get_exclusive_groups(interaction.guild_id)
+        if not groups:
+            await interaction.response.send_message(
+                "No exclusive groups defined yet. Use `/exclusive-group create` to add one.",
+                ephemeral=True,
+            )
+            return
+        embed = discord.Embed(title="Exclusive Groups", color=discord.Color.orange())
+        for name, roles in groups.items():
+            embed.add_field(
+                name=name,
+                value=", ".join(roles) if roles else "*no roles yet*",
+                inline=False,
+            )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @exclusive_group.command(name="create", description="Create a new exclusive group")
+    @app_commands.describe(name="Name for the new group (e.g. Membership Status)")
+    async def eg_create(self, interaction: discord.Interaction, name: str):
+        try:
+            local_store.create_exclusive_group(interaction.guild_id, name)
+        except ValueError as e:
+            await interaction.response.send_message(str(e), ephemeral=True)
+            return
+        await interaction.response.send_message(
+            f"Created exclusive group **{name}**. Use `/exclusive-group add-role` to add roles.",
+            ephemeral=True,
+        )
+
+    @exclusive_group.command(name="delete", description="Delete an exclusive group")
+    @app_commands.describe(name="The group to delete")
+    async def eg_delete(self, interaction: discord.Interaction, name: str):
+        try:
+            local_store.delete_exclusive_group(interaction.guild_id, name)
+        except KeyError:
+            await interaction.response.send_message(
+                f"Exclusive group **{name}** not found.", ephemeral=True
+            )
+            return
+        await interaction.response.send_message(
+            f"Deleted exclusive group **{name}**.", ephemeral=True
+        )
+
+    @exclusive_group.command(name="add-role", description="Add a Discord role to an exclusive group")
+    @app_commands.describe(name="The exclusive group", role="Role to add")
+    async def eg_add_role(self, interaction: discord.Interaction, name: str, role: discord.Role):
+        try:
+            local_store.add_role_to_exclusive_group(interaction.guild_id, name, role.name)
+        except KeyError:
+            await interaction.response.send_message(
+                f"Exclusive group **{name}** not found.", ephemeral=True
+            )
+            return
+        groups = local_store.get_exclusive_groups(interaction.guild_id)
+        roles = groups.get(name, [])
+        await interaction.response.send_message(
+            f"**{name}**: {', '.join(roles)}", ephemeral=True
+        )
+
+    @exclusive_group.command(name="remove-role", description="Remove a role from an exclusive group")
+    @app_commands.describe(name="The exclusive group", role_name="Name of the role to remove")
+    async def eg_remove_role(self, interaction: discord.Interaction, name: str, role_name: str):
+        try:
+            local_store.remove_role_from_exclusive_group(interaction.guild_id, name, role_name)
+        except KeyError:
+            await interaction.response.send_message(
+                f"Exclusive group **{name}** not found.", ephemeral=True
+            )
+            return
+        groups = local_store.get_exclusive_groups(interaction.guild_id)
+        roles = groups.get(name, [])
+        await interaction.response.send_message(
+            f"**{name}**: {', '.join(roles) if roles else '*empty*'}", ephemeral=True
+        )
+
+    # Autocomplete helpers for exclusive-group commands
+    async def _eg_name_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        groups = local_store.get_exclusive_groups(interaction.guild_id)
+        return [
+            app_commands.Choice(name=n, value=n)
+            for n in sorted(groups.keys())
+            if current.lower() in n.lower()
+        ][:25]
+
+    @eg_delete.autocomplete("name")
+    @eg_add_role.autocomplete("name")
+    @eg_remove_role.autocomplete("name")
+    async def eg_name_ac(self, interaction, current):
+        return await self._eg_name_autocomplete(interaction, current)
+
+    @eg_remove_role.autocomplete("role_name")
+    async def eg_role_name_ac(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        group_name = interaction.namespace.name
+        groups = local_store.get_exclusive_groups(interaction.guild_id)
+        roles = groups.get(group_name, [])
         return [
             app_commands.Choice(name=r, value=r)
             for r in roles

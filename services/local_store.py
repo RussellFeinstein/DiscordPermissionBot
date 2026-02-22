@@ -171,3 +171,49 @@ def remove_role_from_bundle(guild_id: int, bundle_name: str, role_name: str) -> 
             raise KeyError(f"Bundle '{bundle_name}' not found")
         bundles[bundle_name] = [r for r in bundles[bundle_name] if r != role_name]
         _save(_guild_dir(guild_id) / "bundles.json", bundles)
+
+
+# ---------------------------------------------------------------------------
+# Exclusive groups
+# ---------------------------------------------------------------------------
+
+def get_exclusive_groups(guild_id: int) -> dict[str, list[str]]:
+    """Returns {group_name: [role_name, ...]}."""
+    return _load(_guild_dir(guild_id) / "exclusive_groups.json", {})
+
+
+def create_exclusive_group(guild_id: int, name: str) -> None:
+    with _get_lock(guild_id):
+        groups = get_exclusive_groups(guild_id)
+        if name in groups:
+            raise ValueError(f"Exclusive group '{name}' already exists")
+        groups[name] = []
+        _save(_guild_dir(guild_id) / "exclusive_groups.json", groups)
+
+
+def delete_exclusive_group(guild_id: int, name: str) -> None:
+    with _get_lock(guild_id):
+        groups = get_exclusive_groups(guild_id)
+        if name not in groups:
+            raise KeyError(f"Exclusive group '{name}' not found")
+        del groups[name]
+        _save(_guild_dir(guild_id) / "exclusive_groups.json", groups)
+
+
+def add_role_to_exclusive_group(guild_id: int, group_name: str, role_name: str) -> None:
+    with _get_lock(guild_id):
+        groups = get_exclusive_groups(guild_id)
+        if group_name not in groups:
+            raise KeyError(f"Exclusive group '{group_name}' not found")
+        if role_name not in groups[group_name]:
+            groups[group_name].append(role_name)
+            _save(_guild_dir(guild_id) / "exclusive_groups.json", groups)
+
+
+def remove_role_from_exclusive_group(guild_id: int, group_name: str, role_name: str) -> None:
+    with _get_lock(guild_id):
+        groups = get_exclusive_groups(guild_id)
+        if group_name not in groups:
+            raise KeyError(f"Exclusive group '{group_name}' not found")
+        groups[group_name] = [r for r in groups[group_name] if r != role_name]
+        _save(_guild_dir(guild_id) / "exclusive_groups.json", groups)
