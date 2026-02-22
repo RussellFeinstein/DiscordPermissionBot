@@ -34,7 +34,7 @@ Category baseline commands  (/category ...)
 Access rule commands  (/access-rule ...)
   /access-rule list                                     — list all rules
   /access-rule add-category <role> <category> <level>   — rule targeting a category
-  /access-rule add-channel  <role> <channel>  <level>   — rule targeting a channel
+  /access-rule add-channel  <role> <channel>  <level>   — rule targeting one or more channels
   /access-rule remove <id>                              — delete a rule by its ID
   /access-rule edit <id> [level] [overwrite]            — change level or allow/deny
   /access-rule prune                                    — remove stale rules/baselines
@@ -990,12 +990,16 @@ class AdminCog(commands.Cog):
 
     @access_rule.command(
         name="add-channel",
-        description="Grant a role a permission level for a specific channel",
+        description="Grant a role a permission level for one or more specific channels",
     )
     @app_commands.describe(
         role="The role to grant access",
-        channel="The channel to apply the permission to",
+        channel1="The channel to apply the permission to",
         level="Permission level to grant",
+        channel2="Additional channel",
+        channel3="Additional channel",
+        channel4="Additional channel",
+        channel5="Additional channel",
         overwrite="Allow or Deny (default: Allow)",
     )
     @app_commands.choices(overwrite=[
@@ -1006,16 +1010,25 @@ class AdminCog(commands.Cog):
         self,
         interaction: discord.Interaction,
         role: discord.Role,
-        channel: discord.abc.GuildChannel,
+        channel1: discord.abc.GuildChannel,
         level: str,
+        channel2: discord.abc.GuildChannel | None = None,
+        channel3: discord.abc.GuildChannel | None = None,
+        channel4: discord.abc.GuildChannel | None = None,
+        channel5: discord.abc.GuildChannel | None = None,
         overwrite: str = "Allow",
     ):
-        if isinstance(channel, discord.CategoryChannel):
+        channels = [c for c in [channel1, channel2, channel3, channel4, channel5] if c is not None]
+
+        bad = [c.name for c in channels if isinstance(c, discord.CategoryChannel)]
+        if bad:
             await interaction.response.send_message(
-                "That's a category — use `/access-rule add-category` instead.",
+                f"{', '.join(f'**{n}**' for n in bad)} is a category — "
+                "use `/access-rule add-category` instead.",
                 ephemeral=True,
             )
             return
+
         levels = local_store.get_permission_levels(interaction.guild_id)
         if level not in levels:
             names = ", ".join(sorted(levels.keys()))
@@ -1023,16 +1036,22 @@ class AdminCog(commands.Cog):
                 f"Level **{level}** not found. Available: {names}", ephemeral=True
             )
             return
-        rule_id = local_store.add_access_rule(
-            interaction.guild_id,
-            role_ids=[str(role.id)],
-            target_type="channel",
-            target_ids=[str(channel.id)],
-            level=level,
-            overwrite=overwrite,
-        )
+
+        added = []
+        for channel in channels:
+            rule_id = local_store.add_access_rule(
+                interaction.guild_id,
+                role_ids=[str(role.id)],
+                target_type="channel",
+                target_ids=[str(channel.id)],
+                level=level,
+                overwrite=overwrite,
+            )
+            added.append(f"• **#{rule_id}** #{channel.name}")
+
         await interaction.response.send_message(
-            f"Rule **#{rule_id}** added: **{role.name}** → **#{channel.name}** [{level} / {overwrite}]",
+            f"Added {len(added)} rule(s) for **{role.name}** [{level} / {overwrite}]:\n"
+            + "\n".join(added),
             ephemeral=True,
         )
 
