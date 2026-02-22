@@ -50,6 +50,17 @@ class Bot(commands.Bot):
         print(f"Logged in as {self.user} (ID: {self.user.id})")
         print(f"Serving {len(self.guilds)} server(s).")
 
+        # In production (no DISCORD_GUILD_ID), clear any stale guild-specific
+        # commands left over from dev-mode testing so they don't appear twice.
+        if not os.environ.get("DISCORD_GUILD_ID"):
+            cleared = 0
+            for guild in self.guilds:
+                self.tree.clear_commands(guild=guild)
+                await self.tree.sync(guild=guild)
+                cleared += 1
+            if cleared:
+                print(f"Cleared guild-specific commands from {cleared} server(s).")
+
     async def on_guild_join(self, guild: discord.Guild):
         """Send a welcome message when the bot is added to a new server."""
         channel = guild.system_channel
