@@ -1054,30 +1054,60 @@ class AdminCog(commands.Cog):
 
     @access_rule.command(
         name="remove",
-        description="Remove an access rule by its ID number",
+        description="Remove one or more access rules by ID",
     )
-    @app_commands.describe(rule_id="The rule to remove (select from the list)")
-    async def ar_remove(self, interaction: discord.Interaction, rule_id: int):
+    @app_commands.describe(
+        rule_id1="Rule to remove",
+        rule_id2="Additional rule to remove",
+        rule_id3="Additional rule to remove",
+        rule_id4="Additional rule to remove",
+        rule_id5="Additional rule to remove",
+    )
+    async def ar_remove(
+        self,
+        interaction: discord.Interaction,
+        rule_id1: int,
+        rule_id2: int | None = None,
+        rule_id3: int | None = None,
+        rule_id4: int | None = None,
+        rule_id5: int | None = None,
+    ):
+        ids = list(dict.fromkeys(
+            rid for rid in [rule_id1, rule_id2, rule_id3, rule_id4, rule_id5]
+            if rid is not None
+        ))
         data = local_store.get_access_rules_data(interaction.guild_id)
-        rule = next((r for r in data.get("rules", []) if r["id"] == rule_id), None)
-        if rule is None:
+        rules_map = {r["id"]: r for r in data.get("rules", [])}
+
+        found = [rules_map[rid] for rid in ids if rid in rules_map]
+        missing = [rid for rid in ids if rid not in rules_map]
+
+        if not found:
             await interaction.response.send_message(
-                f"Access rule **#{rule_id}** not found.", ephemeral=True
+                f"No rules found with ID(s): {', '.join(f'**#{i}**' for i in missing)}",
+                ephemeral=True,
             )
             return
-        role_names = [_display_role(interaction.guild, rid_str) for rid_str in rule["role_ids"]]
-        target_names = []
-        for tid_str in rule["target_ids"]:
-            t = interaction.guild.get_channel(int(tid_str))
-            target_names.append(t.name if t else f"(deleted {tid_str})")
-        summary = (
-            f"**#{rule_id}** {', '.join(role_names)} → "
-            f"{rule['target_type']}({', '.join(target_names)}) "
-            f"[{rule['level']}]"
-        )
+
+        lines = []
+        for rule in found:
+            role_names = [_display_role(interaction.guild, rid_str) for rid_str in rule["role_ids"]]
+            target_names = []
+            for tid_str in rule["target_ids"]:
+                t = interaction.guild.get_channel(int(tid_str))
+                target_names.append(t.name if t else f"(deleted {tid_str})")
+            lines.append(
+                f"• **#{rule['id']}** {', '.join(role_names)} → "
+                f"{rule['target_type']}({', '.join(target_names)}) [{rule['level']}]"
+            )
+        if missing:
+            lines.append(f"*(not found: {', '.join(f'#{i}' for i in missing)} — will be skipped)*")
+
         view = ConfirmView()
         await interaction.response.send_message(
-            f"Remove access rule {summary}?", view=view, ephemeral=True,
+            f"Remove {len(found)} access rule(s)?\n" + "\n".join(lines),
+            view=view,
+            ephemeral=True,
         )
         await view.wait()
         if view.confirmed is None:
@@ -1086,19 +1116,19 @@ class AdminCog(commands.Cog):
         if not view.confirmed:
             await view.button_interaction.response.edit_message(content="Cancelled.", view=None)
             return
-        try:
-            local_store.remove_access_rule(interaction.guild_id, rule_id)
-        except KeyError:
-            await view.button_interaction.response.edit_message(
-                content=f"Access rule **#{rule_id}** not found.", view=None
-            )
-            return
+
+        removed = []
+        for rule in found:
+            try:
+                local_store.remove_access_rule(interaction.guild_id, rule["id"])
+                removed.append(f"**#{rule['id']}**")
+            except KeyError:
+                pass
         await view.button_interaction.response.edit_message(
-            content=f"Deleted access rule **#{rule_id}**.", view=None
+            content=f"Deleted {len(removed)} rule(s): {', '.join(removed)}.", view=None
         )
 
-    @ar_remove.autocomplete("rule_id")
-    async def ar_remove_ac(
+    async def _rule_id_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[int]]:
         data = local_store.get_access_rules_data(interaction.guild_id)
@@ -1119,6 +1149,26 @@ class AdminCog(commands.Cog):
             if current in str(rule["id"]) or current.lower() in label.lower():
                 choices.append(app_commands.Choice(name=label, value=rule["id"]))
         return choices[:25]
+
+    @ar_remove.autocomplete("rule_id1")
+    async def ar_remove_ac1(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        return await self._rule_id_autocomplete(interaction, current)
+
+    @ar_remove.autocomplete("rule_id2")
+    async def ar_remove_ac2(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        return await self._rule_id_autocomplete(interaction, current)
+
+    @ar_remove.autocomplete("rule_id3")
+    async def ar_remove_ac3(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        return await self._rule_id_autocomplete(interaction, current)
+
+    @ar_remove.autocomplete("rule_id4")
+    async def ar_remove_ac4(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        return await self._rule_id_autocomplete(interaction, current)
+
+    @ar_remove.autocomplete("rule_id5")
+    async def ar_remove_ac5(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[int]]:
+        return await self._rule_id_autocomplete(interaction, current)
 
     @access_rule.command(
         name="edit",
