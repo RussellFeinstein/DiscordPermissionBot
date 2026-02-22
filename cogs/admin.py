@@ -1376,11 +1376,15 @@ class AdminCog(commands.Cog):
         def _rule_group_lines(bucket: dict[str, list]) -> list[str]:
             """Return display lines for one bucket.
 
-            Targets sorted alphabetically; blank line between groups for readability.
+            Targets sorted by server position (top-to-bottom as in Discord);
+            deleted targets sorted to the end. Blank line between groups for readability.
             Rules within each target sorted by: @everyone first, then role name, then level.
             """
             lines: list[str] = []
-            sorted_targets = sorted(bucket, key=lambda t: _target_name(t).lower())
+            def _pos(tid_str: str) -> int:
+                ch = guild.get_channel(int(tid_str))
+                return ch.position if ch is not None else 99999
+            sorted_targets = sorted(bucket, key=_pos)
             for i, tid_str in enumerate(sorted_targets):
                 if i > 0:
                     lines.append("")  # visual gap between target groups
