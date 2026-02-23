@@ -1447,9 +1447,14 @@ class AdminCog(commands.Cog):
             Rules within each target sorted by: @everyone first, then role name, then level.
             """
             lines: list[str] = []
-            def _pos(tid_str: str) -> int:
+            def _pos(tid_str: str) -> tuple[int, int]:
                 ch = guild.get_channel(int(tid_str))
-                return ch.position if ch is not None else 99999
+                if ch is None:
+                    return (99999, 99999)
+                if isinstance(ch, discord.CategoryChannel):
+                    return (ch.position, 0)
+                cat_pos = ch.category.position if ch.category else -1
+                return (cat_pos, ch.position)
             sorted_targets = sorted(bucket, key=_pos)
             for i, tid_str in enumerate(sorted_targets):
                 if i > 0:
