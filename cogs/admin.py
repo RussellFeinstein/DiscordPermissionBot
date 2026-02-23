@@ -1330,13 +1330,13 @@ class AdminCog(commands.Cog):
     # /bot-access group
     # ==================================================================
 
-    bot_access = app_commands.Group(
+    access_mgr = app_commands.Group(
         name="bot-access",
         description="Manage which roles can use this bot (administrator only)",
         default_permissions=discord.Permissions(administrator=True),
     )
 
-    @bot_access.command(name="list", description="List roles that have bot management access")
+    @access_mgr.command(name="list", description="List roles that have bot management access")
     async def ba_list(self, interaction: discord.Interaction):
         role_ids = local_store.get_bot_manager_roles(interaction.guild_id)
         if not role_ids:
@@ -1353,7 +1353,7 @@ class AdminCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @bot_access.command(name="add-role", description="Grant a role bot management access")
+    @access_mgr.command(name="add-role", description="Grant a role bot management access")
     @app_commands.describe(role="The role to grant access")
     async def ba_add_role(self, interaction: discord.Interaction, role: discord.Role):
         local_store.add_bot_manager_role(interaction.guild_id, str(role.id))
@@ -1363,7 +1363,7 @@ class AdminCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @bot_access.command(name="remove-role", description="Revoke a role's bot management access")
+    @access_mgr.command(name="remove-role", description="Revoke a role's bot management access")
     @app_commands.describe(role="The role to revoke access from")
     async def ba_remove_role(self, interaction: discord.Interaction, role: discord.Role):
         found = local_store.remove_bot_manager_role(interaction.guild_id, str(role.id))
