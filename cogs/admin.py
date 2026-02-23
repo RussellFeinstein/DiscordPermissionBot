@@ -1326,7 +1326,7 @@ class AdminCog(commands.Cog):
         description="List all access rules, grouped by target and sorted by server position",
     )
     async def ar_list(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
         guild = interaction.guild
         rules = local_store.get_access_rules_data(interaction.guild_id).get("rules", [])
@@ -1389,6 +1389,10 @@ class AdminCog(commands.Cog):
             current_len += len(line) + 1
         if current:
             chunks.append("\n".join(current))
+
+        if not chunks:
+            await interaction.followup.send("No access rules to display.", ephemeral=True)
+            return
 
         for chunk in chunks:
             await interaction.followup.send(chunk, ephemeral=True)
