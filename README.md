@@ -35,7 +35,7 @@ Or grant only specific commands:
 
 ```
 /bot-access grant @Recruiters assign bundles
-/bot-access grant @Officers assign bundles groups status
+/bot-access grant @Officers assign bundles groups
 ```
 
 ---
@@ -138,8 +138,8 @@ Access to bot commands is controlled by two things:
 | Command | Description |
 |---|---|
 | `/bot-access list` | Show all roles and their granted command scopes |
-| `/bot-access grant <role> <scope> [...]` | Grant a role one or more command scopes (or `all` for full access) |
-| `/bot-access revoke <role> <scope> [...]` | Revoke one or more scopes from a role |
+| `/bot-access grant <role> <scope> [scope2] [scope3]` | Grant a role up to 3 command scopes (or `all` for full access) |
+| `/bot-access revoke <role> <scope> [scope2] [scope3]` | Revoke up to 3 scopes from a role |
 | `/bot-access remove-role <role>` | Remove all bot access from a role |
 
 Available scopes: `assign` · `bundles` · `groups` · `access-rules` · `levels` · `sync` · `status`
