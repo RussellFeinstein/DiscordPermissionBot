@@ -123,12 +123,11 @@ class RolesCog(commands.Cog):
     @app_commands.describe(
         member="Member to assign roles to",
         bundle="The name of the bundle to apply",
-        member2="Additional member",
-        member3="Additional member",
-        member4="Additional member",
-        member5="Additional member",
+        member2="2nd member (optional)",
+        member3="3rd member (optional)",
+        member4="4th member (optional)",
+        member5="5th member (optional)",
     )
-    @app_commands.default_permissions(manage_roles=True)
     async def assign(
         self,
         interaction: discord.Interaction,
@@ -225,12 +224,11 @@ class RolesCog(commands.Cog):
     @app_commands.describe(
         member="Member to remove roles from",
         bundle="The name of the bundle to remove",
-        member2="Additional member",
-        member3="Additional member",
-        member4="Additional member",
-        member5="Additional member",
+        member2="2nd member (optional)",
+        member3="3rd member (optional)",
+        member4="4th member (optional)",
+        member5="5th member (optional)",
     )
-    @app_commands.default_permissions(manage_roles=True)
     async def remove_bundle(
         self,
         interaction: discord.Interaction,

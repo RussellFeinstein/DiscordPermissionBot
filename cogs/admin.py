@@ -383,7 +383,6 @@ class AdminCog(commands.Cog):
     level = app_commands.Group(
         name="level",
         description="Manage permission levels",
-        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     @level.command(name="list", description="List all permission levels")
@@ -579,7 +578,6 @@ class AdminCog(commands.Cog):
     bundle = app_commands.Group(
         name="bundle",
         description="Manage role bundles",
-        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     @bundle.command(name="list", description="List all bundles and their roles")
@@ -749,7 +747,6 @@ class AdminCog(commands.Cog):
     exclusive_group = app_commands.Group(
         name="exclusive-group",
         description="Manage exclusive role groups (only one role per group can be held at a time)",
-        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     @exclusive_group.command(name="list", description="List all exclusive groups and their roles")
@@ -898,7 +895,6 @@ class AdminCog(commands.Cog):
     category = app_commands.Group(
         name="category",
         description="Manage per-category @everyone baseline permissions",
-        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     @category.command(name="baseline-list", description="List all category baseline permissions")
@@ -983,7 +979,6 @@ class AdminCog(commands.Cog):
     access_rule = app_commands.Group(
         name="access-rule",
         description="Manage role-based channel/category access rules",
-        default_permissions=discord.Permissions(manage_guild=True),
     )
 
     @access_rule.command(
@@ -1386,7 +1381,6 @@ class AdminCog(commands.Cog):
         name="status",
         description="Show all configured permission settings for this server",
     )
-    @app_commands.default_permissions(manage_guild=True)
     async def status(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
         gid   = interaction.guild_id

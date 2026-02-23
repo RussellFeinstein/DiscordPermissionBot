@@ -99,7 +99,6 @@ class PermissionsCog(commands.Cog):
         name="preview-permissions",
         description="Show what /sync-permissions would change without applying anything.",
     )
-    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def preview_permissions(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
@@ -130,7 +129,6 @@ class PermissionsCog(commands.Cog):
         name="sync-permissions",
         description="Apply all configured permission levels and access rules to Discord.",
     )
-    @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def sync_permissions(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True, thinking=True)
