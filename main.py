@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 import discord
+from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -41,6 +42,22 @@ class Bot(commands.Bot):
             # Production: sync globally (takes ~1 hour to propagate to all servers).
             await self.tree.sync()
             print("Global slash commands synced.")
+
+    async def on_app_command_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        """Catch any unhandled slash-command error and reply so Discord doesn't time out."""
+        print(f"[error] /{interaction.command and interaction.command.qualified_name}: {error}")
+        msg = "An unexpected error occurred. Please try again or contact a server administrator."
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+        except Exception:
+            pass  # If we can't respond at all, at least we logged it above.
 
     async def on_ready(self):
         print(f"Logged in as {self.user} (ID: {self.user.id})")

@@ -358,6 +358,11 @@ class AdminCog(commands.Cog):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Allow server administrators and any role granted bot manager access."""
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command can only be used inside a server.", ephemeral=True
+            )
+            return False
         if interaction.user.guild_permissions.administrator:
             return True
         manager_role_ids = local_store.get_bot_manager_roles(interaction.guild_id)
