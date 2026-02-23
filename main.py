@@ -49,7 +49,11 @@ class Bot(commands.Bot):
         error: app_commands.AppCommandError,
     ) -> None:
         """Catch any unhandled slash-command error and reply so Discord doesn't time out."""
-        print(f"[error] /{interaction.command and interaction.command.qualified_name}: {error}")
+        # CheckFailure means interaction_check already sent a denial message — don't double-up.
+        if isinstance(error, app_commands.CheckFailure):
+            return
+        cmd = interaction.command and interaction.command.qualified_name
+        print(f"[error] /{cmd}: {error}")
         msg = "An unexpected error occurred. Please try again or contact a server administrator."
         try:
             if interaction.response.is_done():

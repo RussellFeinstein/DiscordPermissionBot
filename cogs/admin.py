@@ -1388,7 +1388,7 @@ class AdminCog(commands.Cog):
     )
     @app_commands.default_permissions(manage_guild=True)
     async def status(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer(ephemeral=True, thinking=True)
         gid   = interaction.guild_id
         guild = interaction.guild
 
