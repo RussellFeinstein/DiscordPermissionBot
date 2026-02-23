@@ -1341,45 +1341,48 @@ class AdminCog(commands.Cog):
             cat_pos = ch.category.position if ch.category else -1
             return (cat_pos, ch.position)
 
-        def _bucket_lines(bucket: dict[str, list], label: str) -> list[str]:
+        def _make_embeds(bucket: dict[str, list], section_title: str) -> list[discord.Embed]:
             if not bucket:
                 return []
             n_rules   = sum(len(v) for v in bucket.values())
             n_targets = len(bucket)
-            lines = [f"**{label} — {n_rules} rule(s) / {n_targets} target(s)**"]
+            result: list[discord.Embed] = []
+            embed = discord.Embed(
+                title=f"{section_title} — {n_rules} rule(s) across {n_targets} target(s)",
+                color=discord.Color.blurple(),
+            )
+            char_count = len(embed.title)
             for tid_str in sorted(bucket, key=_chan_pos):
                 ch = guild.get_channel(int(tid_str))
-                name = ch.name if ch else "[deleted channel]"
-                lines.append(f"**{name}**")
+                fname = ch.name if ch else f"[deleted {tid_str}]"
+                lines = []
                 for rule in sorted(bucket[tid_str], key=_rule_sort):
                     role_names = [_display_role(guild, rid) for rid in rule["role_ids"]]
-                    lines.append(f"  › #{rule['id']}  {', '.join(role_names)} [{rule['level']}]")
-            return lines
+                    lines.append(f"• `#{rule['id']}` {', '.join(role_names)} → **{rule['level']}**")
+                fval = _truncate_field(lines)
+                entry_len = len(fname) + len(fval)
+                if len(embed.fields) >= 25 or char_count + entry_len > 5800:
+                    result.append(embed)
+                    embed = discord.Embed(
+                        title=f"{section_title} (continued)",
+                        color=discord.Color.blurple(),
+                    )
+                    char_count = len(embed.title)
+                embed.add_field(name=fname, value=fval or "\u200b", inline=False)
+                char_count += entry_len
+            if embed.fields:
+                result.append(embed)
+            return result
 
-        cat_lines = _bucket_lines(cat_bucket, "Category Rules")
-        ch_lines  = _bucket_lines(ch_bucket,  "Channel Rules")
+        embeds = _make_embeds(cat_bucket, "Category Rules") + _make_embeds(ch_bucket, "Channel Rules")
 
-        all_lines = cat_lines + ([""] if cat_lines and ch_lines else []) + ch_lines
-
-        # Send in chunks that fit Discord's 2000-char limit
-        chunks: list[str] = []
-        current: list[str] = []
-        current_len = 0
-        for line in all_lines:
-            if current_len + len(line) + 1 > 1900 and current:
-                chunks.append("\n".join(current))
-                current, current_len = [], 0
-            current.append(line)
-            current_len += len(line) + 1
-        if current:
-            chunks.append("\n".join(current))
-
-        if not chunks:
+        if not embeds:
             await interaction.followup.send("No access rules to display.", ephemeral=True)
             return
 
-        for chunk in chunks:
-            await interaction.followup.send(chunk, ephemeral=True)
+        # Discord allows up to 10 embeds per message
+        for i in range(0, len(embeds), 10):
+            await interaction.followup.send(embeds=embeds[i:i + 10], ephemeral=True)
 
     # ==================================================================
     # /bot-access group
