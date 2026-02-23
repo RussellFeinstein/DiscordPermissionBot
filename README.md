@@ -25,6 +25,19 @@ Typical first-time setup:
 3. `/access-rule add-category` — grant specific roles elevated access to categories
 4. `/sync-permissions` — apply everything to Discord
 
+To delegate bot management to a non-admin role:
+
+```
+/bot-access grant @YourStaffRole all
+```
+
+Or grant only specific commands:
+
+```
+/bot-access grant @Recruiters assign bundles
+/bot-access grant @Officers assign bundles groups status
+```
+
 ---
 
 ## Stack
@@ -114,14 +127,31 @@ Railway deploys automatically on every push to your default branch. The `railway
 
 ## Commands
 
-### Permissions  *(admin only)*
+Access to bot commands is controlled by two things:
+- **Server administrators** always have full access to everything.
+- **Bot-manager roles** — a server admin can grant any role access to specific command groups via `/bot-access grant`. Until a role is granted access, only admins can use bot commands.
+
+`/bot-access` itself is always administrator-only.
+
+### Bot access management  *(administrator only)*
+
+| Command | Description |
+|---|---|
+| `/bot-access list` | Show all roles and their granted command scopes |
+| `/bot-access grant <role> <scope> [...]` | Grant a role one or more command scopes (or `all` for full access) |
+| `/bot-access revoke <role> <scope> [...]` | Revoke one or more scopes from a role |
+| `/bot-access remove-role <role>` | Remove all bot access from a role |
+
+Available scopes: `assign` · `bundles` · `groups` · `access-rules` · `levels` · `sync` · `status`
+
+### Permissions  *(sync scope)*
 
 | Command | Description |
 |---|---|
 | `/preview-permissions` | Show what `/sync-permissions` would change without applying anything |
 | `/sync-permissions` | Apply all configured levels and access rules to Discord |
 
-### Role assignment  *(manage roles)*
+### Role assignment  *(assign scope)*
 
 | Command | Description |
 |---|---|
@@ -130,7 +160,7 @@ Railway deploys automatically on every push to your default branch. The `railway
 
 Both commands accept up to 5 members at once.
 
-### Permission levels  *(admin only)*
+### Permission levels  *(levels scope)*
 
 | Command | Description |
 |---|---|
@@ -142,7 +172,7 @@ Both commands accept up to 5 members at once.
 | `/level delete <name>` | Delete a level (with confirmation) |
 | `/level reset-defaults` | Restore all levels to built-in defaults |
 
-### Role bundles  *(admin only)*
+### Role bundles  *(bundles scope)*
 
 | Command | Description |
 |---|---|
@@ -153,7 +183,7 @@ Both commands accept up to 5 members at once.
 | `/bundle add-role <bundle> <role>` | Add a Discord role to a bundle (up to 5 roles at once) |
 | `/bundle remove-role <bundle> <role>` | Remove a role from a bundle |
 
-### Exclusive groups  *(admin only)*
+### Exclusive groups  *(groups scope)*
 
 Exclusive groups enforce a "pick one" constraint — assigning any bundle that contains a role from a group automatically removes the other roles in that group from the member.
 
@@ -162,10 +192,10 @@ Exclusive groups enforce a "pick one" constraint — assigning any bundle that c
 | `/exclusive-group list` | List all groups and their roles |
 | `/exclusive-group create <name>` | Create a new group |
 | `/exclusive-group delete <name>` | Delete a group (with confirmation) |
-| `/exclusive-group add-role <group> <role>` | Add a role to a group |
+| `/exclusive-group add-role <group> <role>` | Add a role to a group (up to 5 roles at once) |
 | `/exclusive-group remove-role <group> <role>` | Remove a role from a group |
 
-### Category baselines  *(admin only)*
+### Category baselines  *(access-rules scope)*
 
 Sets the `@everyone` permission level for a category. This is the baseline that everyone inherits before any role-specific access rules are applied.
 
@@ -175,22 +205,19 @@ Sets the `@everyone` permission level for a category. This is the baseline that 
 | `/category baseline-set <category> <level>` | Set `@everyone` baseline for a category |
 | `/category baseline-clear <category>` | Remove the baseline from a category |
 
-### Access rules  *(admin only)*
+### Access rules  *(access-rules scope)*
 
-Access rules grant or deny a role a specific permission level on a category or channel, layered on top of the `@everyone` baseline.
+Access rules grant a role a specific permission level on a category or channel, layered on top of the `@everyone` baseline.
 
 | Command | Description |
 |---|---|
-| `/access-rule list` | List all rules |
-| `/access-rule add-category <role> <category> <level> [overwrite]` | Rule targeting a whole category |
-| `/access-rule add-channel <role> <channel> <level> [overwrite]` | Rule targeting a single channel |
-| `/access-rule edit <id> [level] [overwrite]` | Change the level or Allow/Deny on an existing rule |
-| `/access-rule remove <id>` | Delete a rule (with confirmation) |
+| `/access-rule add-category <role> <category> <level>` | Rule targeting a whole category (up to 5 roles at once) |
+| `/access-rule add-channel <role> <channel> <level>` | Rule targeting one or more channels (up to 5 roles, 5 channels) |
+| `/access-rule edit <id> <level>` | Change the permission level on an existing rule |
+| `/access-rule remove <id>` | Delete a rule (with confirmation, up to 5 IDs at once) |
 | `/access-rule prune` | Remove stale rules and baselines referencing deleted roles or channels |
 
-`overwrite` is `Allow` (default) or `Deny`. Deny rules flip every explicit Allow in the level to an explicit Deny, useful for blocking a role from a channel they'd otherwise inherit access to.
-
-### Status
+### Status  *(status scope)*
 
 | Command | Description |
 |---|---|
@@ -222,10 +249,11 @@ requirements.txt
 services/
   local_store.py           # Per-guild JSON persistence with atomic writes and locking
   sync.py                  # Builds permission plan and applies it to Discord
+  access.py                # Scope-based bot access control (check_scope, CMD_SCOPE)
 cogs/
   permissions.py           # /preview-permissions, /sync-permissions
   roles.py                 # /assign, /remove
-  admin.py                 # /level, /bundle, /exclusive-group, /category, /access-rule, /status
+  admin.py                 # /level, /bundle, /exclusive-group, /category, /access-rule, /bot-access, /status
 data/                      # Runtime data — gitignored, auto-created on first run
   {guild_id}/
     permission_levels.json
@@ -233,4 +261,5 @@ data/                      # Runtime data — gitignored, auto-created on first 
     exclusive_groups.json
     category_baselines.json
     access_rules.json
+    bot_access.json        # Role → granted scopes mapping
 ```
