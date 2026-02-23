@@ -16,7 +16,7 @@ Configuration is stored as JSON files on a persistent volume.
 ## For server admins — getting started
 
 1. Invite the bot to your server (ask the bot host for the invite link)
-2. The bot will post a welcome message with a quick-start overview
+2. The bot will DM you a quick-start overview
 3. Run `/status` at any time to see your current configuration
 
 Typical first-time setup:
@@ -129,7 +129,7 @@ Railway deploys automatically on every push to your default branch. The `railway
 
 Access to bot commands is controlled by two things:
 - **Server administrators** always have full access to everything.
-- **Bot-manager roles** — a server admin can grant any role access to specific command groups via `/bot-access grant`. Until a role is granted access, only admins can use bot commands.
+- **Scoped role access** — admins can grant any role access to specific command scopes via `/bot-access grant`. Until a role is granted at least one scope, only admins can use bot commands.
 
 `/bot-access` itself is always administrator-only.
 
